@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta
+            name="description"
+            content="把 Minecraft Metro 插件的 lines.yml / stops.yml 自动绘制为地铁线网图，支持 SVG / PNG / RMP 导出。"
+        />
+        <title>Metro 线网工坊 · 配置导入自动配图</title>
+        <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+        <link rel="stylesheet" href="css/style.css" />
+    </head>
+    <body>
+        <header class="topbar">
+            <div class="brand">
+                <img
+                    class="brand-logo"
+                    src="assets/logo.svg"
+                    alt="Metro 线网工坊标志"
+                    width="44"
+                    height="44"
+                />
+                <div class="brand-text">
+                    <strong>Metro 线网工坊</strong>
+                    <span class="tag">Minecraft Metro 插件配置 → 地铁线网图</span>
+                </div>
+            </div>
+            <div class="topbar-actions">
+                <span class="topbar-hint">
+                    导入 <code>plugins/Metro/lines.yml</code> + <code>stops.yml</code>，自动配图并导出
+                </span>
+                <button class="btn small" id="btnThanks" type="button">致谢与作者</button>
+            </div>
+        </header>
+
+        <main>
+            <aside id="panel">
+                <section>
+                    <h2>① 导入配置</h2>
+                    <div class="dropzone" id="dropLines">
+                        <div class="dz-title">lines.yml</div>
+                        <div class="dz-sub">拖入文件 / 点击选择</div>
+                        <input type="file" accept=".yml,.yaml,.txt" hidden />
+                    </div>
+                    <div class="dropzone" id="dropStops">
+                        <div class="dz-title">stops.yml</div>
+                        <div class="dz-sub">拖入文件 / 点击选择</div>
+                        <input type="file" accept=".yml,.yaml,.txt" hidden />
+                    </div>
+                    <div class="row" style="margin-top: 8px">
+                        <button class="btn" id="btnSample">载入示例</button>
+                        <button class="btn ghost" id="btnClear">清空</button>
+                    </div>
+                    <details>
+                        <summary>或粘贴文本导入</summary>
+                        <textarea id="taLines" placeholder="在此粘贴 lines.yml 内容"></textarea>
+                        <textarea id="taStops" placeholder="在此粘贴 stops.yml 内容"></textarea>
+                        <button class="btn" id="btnPaste">应用粘贴内容</button>
+                    </details>
+                </section>
+
+                <section>
+                    <h2>② 生成选项</h2>
+                    <label
+                        ><span class="lbl">标题</span>
+                        <input type="text" id="optTitle" value="地铁线网图" style="margin-top: 4px"
+                    /></label>
+                    <label
+                        ><span class="lbl">世界</span>
+                        <select id="optWorld" style="margin-top: 4px"></select>
+                    </label>
+                    <fieldset>
+                        <legend>绘制模式</legend>
+                        <label
+                            ><input type="radio" name="mode" value="real" checked /> 实际走向（含录制轨迹）</label
+                        >
+                        <label><input type="radio" name="mode" value="schematic" /> 45° 示意图（自动折线化）</label>
+                        <label><input type="radio" name="mode" value="perpendicular" /> 直角折线（只用水平 / 垂直段）</label>
+                    </fieldset>
+                    <label><input type="checkbox" id="optMerge" checked /> 合并同名车站（跨线路换乘）</label>
+                    <label
+                        ><input type="checkbox" id="optAutoColor" checked /> 自动配色（线路全部同色 / 白色时）</label
+                    >
+                    <label
+                        ><span class="lbl">线宽</span>
+                        <input type="range" id="optLineWidth" min="4" max="12" step="0.5" value="7"
+                    /></label>
+                    <label
+                        ><span class="lbl">站名字号</span>
+                        <input type="range" id="optFont" min="9" max="18" step="0.5" value="12"
+                    /></label>
+                    <label><input type="checkbox" id="optLegend" checked /> 线路图例</label>
+                    <label><input type="checkbox" id="optScale" checked /> 比例尺</label>
+                    <label><input type="checkbox" id="optNorth" checked /> 指北针</label>
+                    <label><input type="checkbox" id="optFooter" checked /> 页脚署名</label>
+                </section>
+
+                <section>
+                    <h2>③ 导出</h2>
+                    <div class="row">
+                        <button class="btn" id="btnSvg">下载 SVG</button>
+                        <select id="pngScale" style="width: 74px">
+                            <option value="1">1x</option>
+                            <option value="2" selected>2x</option>
+                            <option value="3">3x</option>
+                        </select>
+                        <button class="btn" id="btnPng">下载 PNG</button>
+                    </div>
+                    <label style="margin-top: 8px"
+                        ><input type="checkbox" id="optTransparent" /> PNG 透明背景</label
+                    >
+                    <label
+                        ><span class="lbl">RMP 路径</span>
+                        <select id="rmpPath" style="margin-top: 4px">
+                            <option value="simple" selected>直线（simple，带并行偏移）</option>
+                            <option value="perpendicular">直角折线（perpendicular）</option>
+                        </select>
+                    </label>
+                    <button class="btn primary" id="btnRmp" style="width: 100%">
+                        导出 Rail Map Painter 存档 JSON
+                    </button>
+                    <p class="hint">
+                        导入方法：打开
+                        <a href="https://railmapgen.github.io/rmp/" target="_blank" rel="noreferrer"
+                            >railmapgen.github.io/rmp</a
+                        >
+                        （或 <a href="https://railmapgen.org/" target="_blank" rel="noreferrer">railmapgen.org</a>）→
+                        右上角「导入」按钮 → 选择刚下载的 <code>*-rmp.json</code>。之后可使用其站型素材继续美化排版。
+                    </p>
+                </section>
+
+                <section>
+                    <h2>统计与提示</h2>
+                    <div id="stats"></div>
+                    <div id="warnings"></div>
+                </section>
+            </aside>
+
+            <div class="stage">
+                <div class="stage-toolbar">
+                    <span id="stageTitle"></span>
+                    <span class="grow"></span>
+                    <button class="btn small" id="btnFit">适应宽度</button>
+                    <button class="btn small" id="btnActual">原始大小</button>
+                </div>
+                <div class="preview" id="preview">
+                    <div class="placeholder">等待导入配置…</div>
+                </div>
+            </div>
+        </main>
+
+        <div id="toastRoot" class="toast-stack" aria-live="polite"></div>
+
+        <div class="modal-overlay" id="thanksOverlay" hidden>
+            <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="thanksTitle">
+                <div class="modal-header">
+                    <span id="thanksTitle">致谢与作者</span>
+                    <button class="btn small" id="btnThanksClose" type="button">关闭</button>
+                </div>
+                <div class="modal-body">
+                    <p class="thanks-lead">
+                        Metro 线网工坊建立在以下项目与社区的工作之上。数据的来源、绘制的章法、继续编辑的空间都来自它们；谨此致谢。
+                    </p>
+
+                    <div class="credit-card">
+                        <div class="credit-tile tile-metro">M</div>
+                        <div class="credit-main">
+                            <div class="credit-head">
+                                <strong>Metro 地铁插件</strong>
+                                <span class="credit-badge badge-source">数据来源</span>
+                            </div>
+                            <p class="credit-desc">
+                                提供 lines.yml / stops.yml 的数据结构、站点体系与线路模型，是本工具一切解析工作的起点。
+                            </p>
+                            <a
+                                class="credit-link"
+                                href="https://github.com/CubeX-MC/Metro"
+                                target="_blank"
+                                rel="noreferrer"
+                                >github.com/CubeX-MC/Metro</a
+                            >
+                        </div>
+                    </div>
+
+                    <div class="credit-card">
+                        <div class="credit-tile tile-rmg">R</div>
+                        <div class="credit-main">
+                            <div class="credit-head">
+                                <strong>Railmapgen 项目组</strong>
+                                <span class="credit-badge badge-format">设计参考</span>
+                            </div>
+                            <p class="credit-desc">
+                                Rail Map Generator 与 Rail Map Painter
+                                的绘制方法论与视觉风格，为本工具的排版提供了重要参考；导出的 RMP 存档也可以直接在其中继续美化。
+                            </p>
+                            <a
+                                class="credit-link"
+                                href="https://github.com/railmapgen/rmg"
+                                target="_blank"
+                                rel="noreferrer"
+                                >github.com/railmapgen/rmg</a
+                            >
+                            <a
+                                class="credit-link"
+                                href="https://github.com/railmapgen/rmp"
+                                target="_blank"
+                                rel="noreferrer"
+                                >github.com/railmapgen/rmp</a
+                            >
+                        </div>
+                    </div>
+
+                    <div class="credit-card">
+                        <div class="credit-tile tile-author">清</div>
+                        <div class="credit-main">
+                            <div class="credit-head">
+                                <strong>阿清</strong>
+                                <span class="credit-badge badge-author">作者 / 维护者</span>
+                            </div>
+                            <p class="credit-desc">
+                                本工具的作者：需求整理、配置解析、几何算法与渲染导出的实现，持续打磨细节体验。
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="credit-card">
+                        <div class="credit-tile tile-thanks">谢</div>
+                        <div class="credit-main">
+                            <div class="credit-head">
+                                <strong>特别感谢</strong>
+                                <span class="credit-badge badge-test">测试与反馈</span>
+                            </div>
+                            <p class="credit-desc">
+                                清屿服务器玩家们与所有参与试用、反馈问题的朋友：你们的建议让这张图越来越好用。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <span>Metro 线网工坊 v1.0.0</span>
+                    <span>Neo-Brutalism 视觉语言 · MIT License</span>
+                </div>
+            </div>
+        </div>
+
+        <script src="js/yaml-lite.js"></script>
+        <script src="js/metro-config.js"></script>
+        <script src="js/geo.js"></script>
+        <script src="js/svg-render.js"></script>
+        <script src="js/rmp-export.js"></script>
+        <script src="js/sample-data.js"></script>
+        <script src="js/app.js"></script>
+    </body>
+</html>

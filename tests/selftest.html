@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Metro 线网工坊 · 自检</title>
+        <style>
+            body {
+                font-family: Consolas, 'Microsoft YaHei', monospace;
+                margin: 18px;
+                color: #1f2430;
+            }
+            h1 {
+                font-size: 18px;
+            }
+            .pass {
+                color: #128a2f;
+            }
+            .fail {
+                color: #d32f2f;
+                font-weight: 700;
+            }
+            li {
+                margin: 3px 0;
+                line-height: 1.5;
+            }
+            #preview {
+                border: 1px solid #ddd;
+                margin-top: 14px;
+                padding: 10px;
+                overflow: auto;
+            }
+            #preview svg {
+                max-width: 100%;
+                height: auto;
+            }
+            button {
+                margin: 6px 8px 0 0;
+                padding: 5px 12px;
+            }
+            pre {
+                background: #f6f8fa;
+                padding: 10px;
+                border-radius: 8px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Metro 线网工坊 — 自检</h1>
+        <ul id="results"></ul>
+        <div id="toolbar">
+            <button id="btnReal">预览：实际走向</button>
+            <button id="btnSchematic">预览：45° 示意图</button>
+            <button id="btnPerp">预览：直角折线</button>
+            <button id="btnDownloadSvg">下载当前 SVG</button>
+            <button id="btnDownloadRmp">下载当前 RMP JSON</button>
+        </div>
+        <pre id="summary"></pre>
+        <div id="preview"></div>
+
+        <script src="../js/yaml-lite.js"></script>
+        <script src="../js/metro-config.js"></script>
+        <script src="../js/geo.js"></script>
+        <script src="../js/svg-render.js"></script>
+        <script src="../js/rmp-export.js"></script>
+        <script src="../js/sample-data.js"></script>
+        <script>
+            (function () {
+                'use strict';
+                var MMS = window.MMS;
+                var results = [];
+                var failures = 0;
+
+                function test(name, fn) {
+                    try {
+                        fn();
+                        results.push({ ok: true, name: name });
+                    } catch (e) {
+                        failures++;
+                        results.push({ ok: false, name: name, err: e && e.message ? e.message : String(e) });
+                    }
+                }
+
+                function assert(cond, msg) {
+                    if (!cond) throw new Error(msg || '断言失败');
+                }
+
+                function approx(a, b, tol, msg) {
+                    assert(Math.abs(a - b) <= tol, (msg || '') + ' 期望 ' + b + ' 实际 ' + a);
+                }
+
+                // ---------- 1. YAML 解析 ----------
+                test('YAML：注释 / 引号 / 井号颜色值', function () {
+                    var doc = MMS.yaml.parse(
+                        [
+                            '# 顶部注释',
+                            'a: 1',
+                            "b: '&#FF0000'",
+                            'c: "x # y"  # 这是注释',
+                            "d: '1号线: 东西'",
+                            'e:',
+                            '  - x',
+                            '  - y',
+                            'f:',
+                            '  g: 3.5'
+                        ].join('\n')
+                    );
+                    assert(doc.a === '1', 'a');
+                    assert(doc.b === '&#FF0000', 'b 应保留颜色值，实际=' + doc.b);
+                    assert(doc.c === 'x # y', 'c 引号内 # 不应被截断，实际=' + doc.c);
+                    assert(doc.d === '1号线: 东西', 'd');
+                    assert(Array.isArray(doc.e) && doc.e.length === 2 && doc.e[1] === 'y', 'e 列表');
+                    assert(doc.f && doc.f.g === '3.5', 'f 嵌套');
+                });
+
+                test('YAML：零缩进列表（Bukkit / SnakeYAML 风格）', function () {
+                    var doc = MMS.yaml.parse(
+                        ['a:', '  name: x', '  ordered_stop_ids:', '  - s1', '  - s2', "  color: '&f'", '  admins:', '  - u1'].join('\n')
+                    );
+                    assert(Array.isArray(doc.a.ordered_stop_ids) && doc.a.ordered_stop_ids.length === 2, '同缩进列表应被识别');
+                    assert(doc.a.ordered_stop_ids[1] === 's2', '列表项内容');
+                    assert(doc.a.color === '&f', '列表后应继续解析同级键');
+                    assert(doc.a.admins.length === 1 && doc.a.admins[0] === 'u1', '第二个同缩进列表');
+                });
+
+                // ---------- 2. 颜色解析 ----------
+                test('颜色：&#RRGGBB / &a / &x 格式', function () {
+                    assert(MMS.metro.mcColorToHex('&#00ff00') === '#00FF00', 'hex');
+                    assert(MMS.metro.mcColorToHex('&c') === '#FF5555', 'legacy &c');
+                    assert(MMS.metro.mcColorToHex('&x&f&f&5&5&5&5') === '#FF5555', '&x 格式，实际=' + MMS.metro.mcColorToHex('&x&f&f&5&5&5&5'));
+                    assert(MMS.metro.mcColorToHex('garbage') === null, '非法值');
+                });
+
+                // ---------- 3. 旧版键名兼容 ----------
+                var LEGACY_LINES = [
+                    'red:',
+                    '  name: 红线',
+                    '  ordered_platform_ids:',
+                    '    - a',
+                    '    - b',
+                    '    - c'
+                ].join('\n');
+                var LEGACY_STOPS = [
+                    'a:',
+                    '  name: 甲站',
+                    '  corner1: world,0,64,0',
+                    '  corner2: world,10,70,10',
+                    '  stopPoint: world,5,65,5',
+                    '  launchYaw: 90.0',
+                    'b:',
+                    '  name: 乙站',
+                    '  stopPoint: world,100,64,5',
+                    'c:',
+                    '  name: 丙站',
+                    '  stopPoint: world,200,64,5'
+                ].join('\n');
+
+                var legacyModel = null;
+                test('解析：旧版（1.1.x）键名', function () {
+                    legacyModel = MMS.metro.parse(LEGACY_LINES, LEGACY_STOPS);
+                    assert(legacyModel.lines.length === 1, '线路数');
+                    assert(legacyModel.lines[0].stopIds.length === 3, '停靠区数');
+                    assert(legacyModel.stops.size === 3, '停靠区数');
+                    assert(MMS.metro.parse(LEGACY_LINES, LEGACY_STOPS).stops.get('a').x === 5, 'stopPoint 解析');
+                });
+
+                test('几何：旧版配置可生成', function () {
+                    var m = MMS.geo.build(legacyModel, { mergeByName: true, mode: 'real' });
+                    assert(m.nodes.length === 3, '节点数');
+                    assert(m.lines.length === 1, '线路数');
+                    assert(isFinite(m.bounds.minX) && isFinite(m.bounds.maxY), '包围盒');
+                });
+
+                test('几何：忽略未被线路引用的停靠区', function () {
+                    var lines = [
+                        'route:',
+                        '  name: 正式线路',
+                        '  ordered_stop_ids:',
+                        '    - a',
+                        '    - b'
+                    ].join('\n');
+                    var stops = [
+                        'a:', '  name: 甲站', '  stoppoint_location: world,0,64,0',
+                        'b:', '  name: 乙站', '  stoppoint_location: world,100,64,0',
+                        'unused1:', '  name: 测试站一', '  stoppoint_location: test_world,0,64,0',
+                        'unused2:', '  name: 测试站二', '  stoppoint_location: test_world,100,64,0',
+                        'unused3:', '  name: 林场旧站', '  stoppoint_location: test_world,200,64,0'
+                    ].join('\n');
+                    var map = MMS.geo.build(MMS.metro.parse(lines, stops), { mode: 'real' });
+                    assert(map.world === 'world', '未引用站不能影响默认世界选择');
+                    assert(map.nodes.length === 2, '地图只应保留线路引用的站');
+                    assert(map.stats.orphanStopCount === 3, '应统计忽略的孤立站');
+                    assert(map.nodes.every(function (node) { return node.name !== '林场旧站'; }), '林场旧站不应出现在地图');
+                });
+
+                // ---------- 4. 示例数据 ----------
+                var sampleModel = null,
+                    mapReal = null,
+                    mapSchematic = null,
+                    mapPerp = null;
+                test('解析：内置示例', function () {
+                    sampleModel = MMS.metro.parse(MMS.SAMPLE.lines, MMS.SAMPLE.stops);
+                    assert(sampleModel.lines.length === 3, '线路数=' + sampleModel.lines.length);
+                    assert(sampleModel.stops.size >= 20, '停靠区数=' + sampleModel.stops.size);
+                    assert(sampleModel.stats.routeLineCount === 1, '有轨迹的线路数');
+                });
+
+                test('几何：实际走向模式', function () {
+                    mapReal = MMS.geo.build(sampleModel, { mergeByName: true, mode: 'real' });
+                    assert(mapReal.nodes.length >= 18, '节点数=' + mapReal.nodes.length);
+                    assert(mapReal.stats.transferCount === 4, '换乘站数=' + mapReal.stats.transferCount);
+                    var l1 = mapReal.lines.filter(function (l) {
+                        return l.id === 'line1';
+                    })[0];
+                    assert(l1 && l1.hasRoute, 'line1 应使用录制轨迹');
+                    var curved = 0;
+                    l1.segments.forEach(function (s) {
+                        s.parts.forEach(function (p) {
+                            if (p.length > 2) curved++;
+                        });
+                    });
+                    assert(curved >= 5, '使用轨迹点的区段数=' + curved);
+                    mapReal.lines.forEach(function (l) {
+                        l.segments.forEach(function (s) {
+                            s.parts.forEach(function (p) {
+                                p.forEach(function (pt) {
+                                    assert(isFinite(pt.x) && isFinite(pt.y), '坐标必须有限');
+                                });
+                            });
+                        });
+                    });
+                });
+
+                test('几何：并行区段偏移（1/2 号线共用中央公园—市民广场）', function () {
+                    var offs = [];
+                    mapReal.lines.forEach(function (l) {
+                        l.segments.forEach(function (s) {
+                            var key = [s.a.name, s.b.name].sort().join('—');
+                            if (key.indexOf('中央公园') >= 0 && key.indexOf('市民广场') >= 0) offs.push(s.offset);
+                        });
+                    });
+                    assert(offs.length === 2, '应有 2 条线经过该区段，实际=' + offs.length);
+                    assert(Math.abs(offs[0] - offs[1]) > 1, '两条线偏移应不同：' + offs.join(','));
+                    approx(offs[0] + offs[1], 0, 1e-6, '偏移应对称');
+                });
+
+                test('几何：45° 折线化模式', function () {
+                    mapSchematic = MMS.geo.build(sampleModel, { mergeByName: true, mode: 'schematic' });
+                    var bad = 0,
+                        checked = 0;
+                    mapSchematic.lines.forEach(function (l) {
+                        l.segments.forEach(function (s) {
+                            s.parts.forEach(function (p) {
+                                for (var i = 1; i < p.length; i++) {
+                                    var dx = p[i].x - p[i - 1].x,
+                                        dy = p[i].y - p[i - 1].y;
+                                    if (Math.abs(dx) < 0.3 && Math.abs(dy) < 0.3) continue;
+                                    var ang = (Math.atan2(Math.abs(dy), Math.abs(dx)) * 180) / Math.PI;
+                                    checked++;
+                                    var ok = ang <= 8.5 || ang >= 81.5 || Math.abs(ang - 45) <= 8.5;
+                                    if (!ok) bad++;
+                                }
+                            });
+                        });
+                    });
+                    assert(checked > 20, '检查段数=' + checked);
+                    assert(bad === 0, '存在非 0/45/90 角度的线段：' + bad + '/' + checked);
+                });
+
+                test('几何：直角折线化（先水平后垂直）', function () {
+                    var m = MMS.metro.parse(
+                        ['x:', '  name: X线', '  ordered_stop_ids:', '    - a', '    - b'].join('\n'),
+                        [
+                            'a:',
+                            '  name: 甲站',
+                            '  stoppoint_location: world,0,64,0',
+                            'b:',
+                            '  name: 乙站',
+                            '  stoppoint_location: world,100,64,50'
+                        ].join('\n')
+                    );
+                    var g = MMS.geo.build(m, { mode: 'perpendicular' });
+                    var seg = g.lines[0].segments[0];
+                    assert(seg.parts.length === 1, '单段零件数=' + seg.parts.length);
+                    var pts = seg.parts[0];
+                    assert(pts.length === 3, '直角折线应有 3 个顶点，实际=' + pts.length);
+                    approx(pts[1].x, pts[2].x, 1e-6, '转角 x 应等于终点 x');
+                    approx(pts[1].y, pts[0].y, 1e-6, '转角 y 应等于起点 y');
+                    approx(pts[0].x, seg.a.x, 1e-6, '起点应对齐线路节点');
+                    approx(pts[2].y, seg.b.y, 1e-6, '终点应对齐线路节点');
+                });
+
+                test('几何：直角折线模式全部水平 / 垂直', function () {
+                    mapPerp = MMS.geo.build(sampleModel, { mergeByName: true, mode: 'perpendicular' });
+                    var bad = 0,
+                        checked = 0;
+                    mapPerp.lines.forEach(function (l) {
+                        l.segments.forEach(function (s) {
+                            s.parts.forEach(function (p) {
+                                for (var i = 1; i < p.length; i++) {
+                                    var dx = Math.abs(p[i].x - p[i - 1].x),
+                                        dy = Math.abs(p[i].y - p[i - 1].y);
+                                    if (dx < 0.3 && dy < 0.3) continue;
+                                    checked++;
+                                    if (dx > 0.5 && dy > 0.5) bad++;
+                                }
+                            });
+                        });
+                    });
+                    assert(checked > 20, '检查段数=' + checked);
+                    assert(bad === 0, '存在斜线段：' + bad + '/' + checked);
+                });
+
+                test('几何：自动配色（全部同色 / 白色时按分组着色）', function () {
+                    var m = MMS.metro.parse(
+                        [
+                            'l1:',
+                            '  name: 一号线',
+                            "  color: '&f'",
+                            '  ordered_stop_ids:',
+                            '    - p1',
+                            '    - p2',
+                            'l2:',
+                            '  name: 二号线',
+                            "  color: '&f'",
+                            '  ordered_stop_ids:',
+                            '    - p2',
+                            '    - p1',
+                            'l3:',
+                            '  name: 三号线',
+                            "  color: '&f'",
+                            '  ordered_stop_ids:',
+                            '    - p3',
+                            '    - p4'
+                        ].join('\n'),
+                        [
+                            'p1:',
+                            '  name: 甲',
+                            '  stoppoint_location: world,0,64,0',
+                            'p2:',
+                            '  name: 乙',
+                            '  stoppoint_location: world,100,64,0',
+                            'p3:',
+                            '  name: 丙',
+                            '  stoppoint_location: world,0,64,200',
+                            'p4:',
+                            '  name: 丁',
+                            '  stoppoint_location: world,100,64,200'
+                        ].join('\n')
+                    );
+                    var g = MMS.geo.build(m, { mergeByName: true, mode: 'real' });
+                    var byId = {};
+                    g.lines.forEach(function (l) {
+                        byId[l.id] = l;
+                    });
+                    assert(byId.l1.colorHex !== '#FFFFFF', '不应仍为白色，实际=' + byId.l1.colorHex);
+                    assert(byId.l1.autoColor === true, '应标记 autoColor');
+                    assert(byId.l1.colorHex === byId.l2.colorHex, '同一线路的正反方向（同站集）应同色');
+                    assert(byId.l3.colorHex !== byId.l1.colorHex, '不同线路应不同色');
+                    var warned = g.warnings.some(function (w) {
+                        return w.indexOf('自动配色') >= 0 || w.indexOf('自动分配') >= 0;
+                    });
+                    assert(warned, '应有自动配色提示');
+                });
+
+                test('几何：区分线路交叉与真实换乘', function () {
+                    var stops = [
+                        'a:', '  name: A', '  stoppoint_location: world,-10,64,0',
+                        'b:', '  name: B', '  stoppoint_location: world,10,64,0',
+                        'c:', '  name: C', '  stoppoint_location: world,0,64,-10',
+                        'd:', '  name: D', '  stoppoint_location: world,0,64,10',
+                        'x:', '  name: 换乘点', '  stoppoint_location: world,0,64,0'
+                    ].join('\n');
+                    var crossingLines = [
+                        'h:', '  name: H线', '  ordered_stop_ids:', '    - a', '    - b',
+                        'v:', '  name: V线', '  ordered_stop_ids:', '    - c', '    - d'
+                    ].join('\n');
+                    var crossingMap = MMS.geo.build(MMS.metro.parse(crossingLines, stops), { mode: 'perpendicular' });
+                    assert(crossingMap.crossings.length === 1, '应检测到 1 处非换乘交叉');
+                    assert(crossingMap.stats.transferCount === 0, '几何交叉不能自动算换乘');
+                    assert(crossingMap.transferStations.length === 0, '纯交叉没有换乘站');
+                    var crossingSvg = MMS.render.build(crossingMap, { lineWidth: 7 }).svg;
+                    assert(crossingSvg.indexOf('stroke-linecap="butt"') >= 0, '交叉处应绘制底层断口');
+
+                    var tStops = stops.replace(
+                        'c:\n  name: C\n  stoppoint_location: world,0,64,-10',
+                        'c:\n  name: C\n  stoppoint_location: world,0,64,0'
+                    );
+                    var tMap = MMS.geo.build(MMS.metro.parse(crossingLines, tStops), { mode: 'perpendicular' });
+                    assert(tMap.crossings.length === 1, '站点端点落在线路中间时也应检测为非换乘交叉');
+                    assert(tMap.stats.transferCount === 0, 'T 型几何交点没有共享站点时不是换乘');
+
+                    var transferLines = [
+                        'h:', '  name: H线', '  ordered_stop_ids:', '    - a', '    - x', '    - b',
+                        'v:', '  name: V线', '  ordered_stop_ids:', '    - c', '    - x', '    - d'
+                    ].join('\n');
+                    var transferMap = MMS.geo.build(MMS.metro.parse(transferLines, stops), { mode: 'perpendicular' });
+                    assert(transferMap.stats.transferCount === 1, '共享站点应计为 1 个换乘站');
+                    assert(transferMap.transferStations[0].name === '换乘点', '应列出共享站点名称');
+                    assert(transferMap.crossings.length === 0, '真实换乘站不应画成非换乘交叉');
+
+                    var explicitStops = stops.replace(
+                        'x:\n  name: 换乘点\n  stoppoint_location: world,0,64,0',
+                        'x:\n  name: 换乘点\n  stoppoint_location: world,0,64,0\n  transferable_lines:\n  - v'
+                    );
+                    var explicitLines = [
+                        'h:', '  name: H线', '  ordered_stop_ids:', '    - a', '    - x', '    - b',
+                        'v:', '  name: V线', '  ordered_stop_ids:', '    - c', '    - d'
+                    ].join('\n');
+                    var explicitMap = MMS.geo.build(MMS.metro.parse(explicitLines, explicitStops), { mode: 'perpendicular' });
+                    assert(explicitMap.stats.transferCount === 1, 'transferable_lines 应识别显式换乘');
+                    assert(explicitMap.transferStations[0].lines.indexOf('v') >= 0, '换乘站应关联可换乘线路');
+                    assert(explicitMap.crossings.length === 0, '显式换乘处不应画断线跨越');
+                });
+
+                // ---------- 5. 渲染 ----------
+                var outReal = null,
+                    outSchematic = null,
+                    outPerp = null;
+                test('渲染：SVG 输出', function () {
+                    outReal = MMS.render.build(mapReal, { title: '自检图', fontSize: 12, lineWidth: 7 });
+                    outSchematic = MMS.render.build(mapSchematic, { title: '自检图（示意）', fontSize: 12, lineWidth: 7 });
+                    outPerp = MMS.render.build(mapPerp, { title: '自检图（直角）', fontSize: 12, lineWidth: 7 });
+                    [outReal, outSchematic, outPerp].forEach(function (o) {
+                        assert(o.svg.indexOf('<svg') === 0, 'SVG 头');
+                        assert(o.svg.indexOf('NaN') < 0, 'SVG 不应含 NaN');
+                        assert(o.svg.indexOf('undefined') < 0, 'SVG 不应含 undefined');
+                        assert(o.svg.indexOf('中央公园') >= 0, '应包含站名');
+                        assert(o.width > 200 && o.height > 100, '尺寸');
+                    });
+                    assert(outReal.svg.indexOf('#E4353B') >= 0, '应包含 1 号线颜色');
+                    assert(outPerp.svg.indexOf('直角折线') >= 0, '应包含直角折线标签');
+                });
+
+                test('渲染：站名摆放有换乘站', function () {
+                    assert(outReal.placements.length >= 18, '摆放数量=' + outReal.placements.length);
+                    outReal.placements.forEach(function (p) {
+                        assert(['right', 'left', 'top', 'bottom'].indexOf(p.side) >= 0, 'side 合法');
+                    });
+                });
+
+                test('标签：站名避开线路', function () {
+                    var lineModel = MMS.metro.parse(
+                        ['line:', '  name: 水平线', '  ordered_stop_ids:', '    - west', '    - east'].join('\n'),
+                        [
+                            'west:', '  name: 西站', '  stoppoint_location: world,0,64,0',
+                            'east:', '  name: 东站', '  stoppoint_location: world,100,64,0'
+                        ].join('\n')
+                    );
+                    var lineMap = MMS.geo.build(lineModel, { mode: 'real' });
+                    var lineOut = MMS.render.build(lineMap, { lineWidth: 7, fontSize: 12 });
+                    var lineY = lineMap.lines[0].segments[0].parts[0][0].y;
+                    lineOut.placements.forEach(function (placement) {
+                        var rect = placement;
+                        var verticalHit = rect.y - 5 <= lineY && rect.y + rect.h + 5 >= lineY;
+                        var segment = lineMap.lines[0].segments[0].parts[0];
+                        var minX = Math.min(segment[0].x, segment[segment.length - 1].x);
+                        var maxX = Math.max(segment[0].x, segment[segment.length - 1].x);
+                        var horizontalHit = rect.x - 5 <= maxX && rect.x + rect.w + 5 >= minX;
+                        assert(!(verticalHit && horizontalHit), placement.node.name + ' 压在线路上');
+                        if (placement.side === 'top' || placement.side === 'bottom') {
+                            approx(placement.textY, rect.y + rect.h / 2, 1e-6, placement.node.name + ' 文字坐标应与避让框一致');
+                        }
+                    });
+                });
+
+                // ---------- 6. RMP 导出 ----------
+                var rmpSave = null;
+                test('RMP：存档结构', function () {
+                    rmpSave = MMS.rmp.build(mapReal, outReal.placements, { title: '自检图' });
+                    var json = JSON.stringify(rmpSave);
+                    var back = JSON.parse(json);
+                    assert(Number.isInteger(back.version), 'version 必须为整数');
+                    assert(back.graph && back.graph.options && back.graph.options.multi === true, 'graph.options');
+                    assert(back.graph.nodes.length === mapReal.nodes.length, '节点数一致');
+                    var keys = new Set();
+                    back.graph.nodes.forEach(function (n) {
+                        assert(/^stn_/.test(n.key), '车站 id 前缀');
+                        assert(!keys.has(n.key), '车站 id 唯一：' + n.key);
+                        keys.add(n.key);
+                        var t = n.attributes.type;
+                        assert(t === 'shmetro-basic' || t === 'shmetro-int', '车站类型=' + t);
+                        assert(n.attributes[t] && Array.isArray(n.attributes[t].names), '站名属性');
+                        assert(isFinite(n.attributes.x) && isFinite(n.attributes.y), '坐标');
+                    });
+                    assert(back.graph.edges.length >= 20, '边数=' + back.graph.edges.length);
+                    back.graph.edges.forEach(function (e) {
+                        assert(keys.has(e.source) && keys.has(e.target), '边的端点必须存在');
+                        assert(/^line_/.test(e.key), '边 id 前缀');
+                        var a = e.attributes;
+                        assert(a.type === 'simple' || a.type === 'perpendicular', '路径类型');
+                        assert(a.style === 'single-color', '样式');
+                        assert(a['single-color'] && /^#[0-9A-F]{6}$/i.test(a['single-color'].color[2]), '颜色');
+                        assert(typeof a.reconcileId === 'string', 'reconcileId');
+                        assert(a.parallelIndex === -1, 'parallelIndex');
+                    });
+                    // 直角模式
+                    var savePerp = MMS.rmp.build(mapReal, outReal.placements, { title: 'x', pathType: 'perpendicular' });
+                    savePerp.graph.edges.forEach(function (e) {
+                        assert(e.attributes.type === 'perpendicular' && e.attributes.perpendicular, '直角路径属性');
+                    });
+                });
+
+                // ---------- 7. 边界情况 ----------
+                test('边界：空配置不崩溃', function () {
+                    var emptyModel = MMS.metro.parse('', '');
+                    var em = MMS.geo.build(emptyModel, {});
+                    var eo = MMS.render.build(em, {});
+                    assert(eo.svg.indexOf('<svg') === 0, '仍应输出 SVG');
+                });
+
+                test('边界：线路引用不存在的站台', function () {
+                    var m = MMS.metro.parse(
+                        ['x:', '  name: X线', '  ordered_stop_ids:', '    - a', '    - ghost', '    - b'].join('\n'),
+                        ['a:', '  display_name: A', '  stoppoint_location: world,0,64,0', 'b:', '  display_name: B', '  stoppoint_location: world,100,64,0'].join('\n')
+                    );
+                    assert(m.warnings.length >= 1, '应有警告');
+                    var g = MMS.geo.build(m, {});
+                    assert(g.lines.length === 1 && g.lines[0].stopCount === 2, '应忽略幽灵站台');
+                });
+
+                // ---------- 渲染结果 ----------
+                var list = document.getElementById('results');
+                results.forEach(function (r) {
+                    var li = document.createElement('li');
+                    li.className = r.ok ? 'pass' : 'fail';
+                    li.textContent = (r.ok ? '[通过] ' : '[失败] ') + r.name + (r.ok ? '' : ' —— ' + r.err);
+                    list.appendChild(li);
+                });
+                document.getElementById('summary').textContent =
+                    '通过 ' + (results.length - failures) + ' / ' + results.length + '，失败 ' + failures + '。';
+
+                function show(out) {
+                    document.getElementById('preview').innerHTML = out.svg;
+                    document.getElementById('preview').setAttribute('data-svg', out.svg);
+                }
+                show(outReal);
+
+                document.getElementById('btnReal').onclick = function () {
+                    show(outReal);
+                };
+                document.getElementById('btnSchematic').onclick = function () {
+                    show(outSchematic);
+                };
+                document.getElementById('btnPerp').onclick = function () {
+                    show(outPerp);
+                };
+                document.getElementById('btnDownloadSvg').onclick = function () {
+                    var svg = document.getElementById('preview').getAttribute('data-svg') || '';
+                    var a = document.createElement('a');
+                    a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+                    a.download = 'selftest.svg';
+                    a.click();
+                };
+                document.getElementById('btnDownloadRmp').onclick = function () {
+                    var a = document.createElement('a');
+                    a.href = URL.createObjectURL(new Blob([JSON.stringify(rmpSave)], { type: 'application/json' }));
+                    a.download = 'selftest-rmp.json';
+                    a.click();
+                };
+            })();
+        </script>
+    </body>
+</html>

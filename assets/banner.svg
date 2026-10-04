@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 420" width="1600" height="420" role="img"
+    aria-label="Metro 线网工坊 — Minecraft Metro 插件配置导入自动配图">
+    <defs>
+        <pattern id="dotgrid" width="26" height="26" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="2" fill="#000000" opacity="0.12" />
+        </pattern>
+    </defs>
+
+    <!-- 底色与网点 -->
+    <rect width="1600" height="420" fill="#f4f3ee" />
+    <rect width="1600" height="420" fill="url(#dotgrid)" />
+
+    <!-- 主卡片 -->
+    <rect x="70" y="74" width="1460" height="286" fill="#000000" />
+    <rect x="56" y="60" width="1460" height="286" fill="#ffffff" stroke="#000000" stroke-width="8" />
+
+    <!-- 角部装饰色块 -->
+    <rect x="1424" y="84" width="22" height="22" fill="#8b5cf6" stroke="#000000" stroke-width="5" />
+    <rect x="1450" y="84" width="22" height="22" fill="#10b981" stroke="#000000" stroke-width="5" />
+    <rect x="1476" y="84" width="22" height="22" fill="#f59e0b" stroke="#000000" stroke-width="5" />
+
+    <!-- 标志 -->
+    <g transform="translate(96, 96) scale(0.42)">
+        <rect x="48" y="48" width="404" height="404" rx="12" fill="#000000" />
+        <rect x="28" y="28" width="404" height="404" rx="12" fill="#8b5cf6" stroke="#000000" stroke-width="18" />
+        <rect x="392" y="64" width="26" height="26" fill="#10b981" stroke="#000000" stroke-width="7" />
+        <rect x="66" y="390" width="26" height="26" fill="#f59e0b" stroke="#000000" stroke-width="7" />
+        <rect x="96" y="96" width="268" height="268" rx="8" fill="#ffffff" stroke="#000000" stroke-width="12" />
+        <path d="M132 328 L196 264 L300 264 L332 232" fill="none" stroke="#10b981" stroke-width="26"
+            stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M132 200 L204 200 L300 296 L332 296" fill="none" stroke="#ffffff" stroke-width="38"
+            stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M132 200 L204 200 L300 296 L332 296" fill="none" stroke="#f59e0b" stroke-width="26"
+            stroke-linecap="round" stroke-linejoin="round" />
+        <circle cx="132" cy="328" r="11" fill="#ffffff" stroke="#000000" stroke-width="7" />
+        <circle cx="196" cy="264" r="11" fill="#ffffff" stroke="#000000" stroke-width="7" />
+        <circle cx="300" cy="264" r="11" fill="#ffffff" stroke="#000000" stroke-width="7" />
+        <circle cx="332" cy="232" r="11" fill="#ffffff" stroke="#000000" stroke-width="7" />
+        <circle cx="132" cy="200" r="11" fill="#ffffff" stroke="#000000" stroke-width="7" />
+        <circle cx="204" cy="200" r="11" fill="#ffffff" stroke="#000000" stroke-width="7" />
+        <circle cx="300" cy="296" r="11" fill="#ffffff" stroke="#000000" stroke-width="7" />
+        <circle cx="332" cy="296" r="11" fill="#ffffff" stroke="#000000" stroke-width="7" />
+        <circle cx="268" cy="264" r="24" fill="#ffffff" stroke="#000000" stroke-width="9" />
+        <circle cx="268" cy="264" r="7" fill="#ffffff" stroke="#000000" stroke-width="6" />
+    </g>
+
+    <!-- 文字 -->
+    <g font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif">
+        <text x="348" y="118" font-size="19" font-weight="700" letter-spacing="7" fill="#6b7280"
+            font-family="'Consolas','Courier New',monospace">METRO MAP STUDIO · MINECRAFT METRO</text>
+        <text x="348" y="196" font-size="72" font-weight="900" letter-spacing="2" fill="#8b5cf6"
+            stroke="#000000" stroke-width="8" stroke-linejoin="round" paint-order="stroke">METRO 线网工坊</text>
+        <text x="350" y="246" font-size="29" font-weight="600" fill="#374151">把 Metro 插件配置变成一张可以直接出版的线网图</text>
+    </g>
+
+    <!-- 徽章 -->
+    <g font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif">
+        <rect x="358" y="278" width="150" height="48" fill="#000000" />
+        <rect x="352" y="272" width="150" height="48" rx="6" fill="#10b981" stroke="#000000" stroke-width="6" />
+        <text x="427" y="304" font-size="24" font-weight="800" fill="#000000" text-anchor="middle">零依赖</text>
+
+        <rect x="524" y="278" width="150" height="48" fill="#000000" />
+        <rect x="518" y="272" width="150" height="48" rx="6" fill="#f59e0b" stroke="#000000" stroke-width="6" />
+        <text x="593" y="304" font-size="24" font-weight="800" fill="#000000" text-anchor="middle">无需构建</text>
+
+        <rect x="696" y="278" width="410" height="48" fill="#000000" />
+        <rect x="690" y="272" width="410" height="48" rx="6" fill="#8b5cf6" stroke="#000000" stroke-width="6" />
+        <text x="895" y="304" font-size="24" font-weight="800" fill="#ffffff" text-anchor="middle">SVG / PNG / RMP 三格式导出</text>
+    </g>
+</svg>

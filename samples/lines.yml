@@ -1,0 +1,75 @@
+# 示例：云屿市轨道交通 lines.yml
+# 格式说明：与 Metro 插件（CubeX-MC/Metro）一致，可直接放到 plugins/Metro/lines.yml 使用。
+# route_points 为 /m line recordroute 录制的轨迹点（可选，有则按实际走向绘制）。
+
+line1:
+  name: 1号线
+  color: '&#E4353B'
+  ordered_stop_ids:
+    - l1_redcliff
+    - l1_orchard
+    - l1_westgate
+    - l1_oldtown
+    - l1_library
+    - l1_centralpark
+    - l1_civic
+    - l1_museum
+    - l1_university
+    - l1_stadium
+    - l1_eastlake
+    - l1_airport
+  route_points:
+    - world,-640,64,-80
+    - world,-600,64,-74
+    - world,-560,64,-63
+    - world,-500,64,-56
+    - world,-460,64,-44
+    - world,-420,64,-40
+    - world,-380,64,-29
+    - world,-340,64,-20
+    - world,-300,64,-12
+    - world,-260,64,-3
+    - world,-220,64,1
+    - world,-180,64,9
+    - world,-140,64,15
+    - world,-100,64,20
+    - world,-60,64,24
+    - world,-20,64,27
+    - world,20,64,30
+    - world,60,64,30
+    - world,100,64,30
+    - world,140,64,29
+    - world,180,64,26
+    - world,220,64,20
+    - world,260,64,14
+    - world,300,64,6
+    - world,340,64,0
+    - world,380,64,-8
+    - world,420,64,-14
+    - world,460,64,-19
+    - world,500,64,-30
+    - world,540,64,-42
+    - world,560,64,-50
+
+line2:
+  name: 2号线
+  color: '&#2E6FD9'
+  ordered_stop_ids:
+    - l2_northyard
+    - l2_waterworks
+    - l2_stadiumnorth
+    - l2_centralpark
+    - l2_civic
+    - l2_southgate
+    - l2_railway
+    - l2_southyard
+
+line3:
+  name: 3号线
+  color: '&#22A06B'
+  ordered_stop_ids:
+    - l3_westport
+    - l3_market
+    - l3_university
+    - l3_eastpark
+    - l3_railway
