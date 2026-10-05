@@ -37,6 +37,7 @@ Metro 线网工坊（Metro Map Studio）面向使用 [Metro](https://github.com/
 | 站名避线 | 站名候选位置避开线路笔画，并考虑当前线宽留出间距 |
 | 自动配色 | 线路全部同色或为默认白色时，按“线路组”（上行 / 下行视为一组）自动分配预览配色 |
 | 三格式导出 | SVG 矢量、PNG 位图（1x / 2x / 3x，可选透明背景）、RMP 存档 JSON |
+| 多语言界面 | 界面、提示信息与导出地图文本支持 Türkçe、English 和简体中文；可在顶栏切换，语言偏好保存在当前浏览器 |
 | 内置自检 | `tests/selftest.html` 覆盖解析、几何、渲染与导出的 20 项用例 |
 | 零依赖部署 | 纯原生 JavaScript，可放在任意静态目录或直接本地打开 |
 
@@ -50,6 +51,14 @@ Metro 线网工坊（Metro Map Studio）面向使用 [Metro](https://github.com/
 4. 按需调整标题、世界、绘制模式与外观选项，然后导出 SVG / PNG / RMP。
 
 > 也可以把两个文件的内容直接粘贴到「或粘贴文本导入」区域。
+
+## Languages / Dil desteği
+
+The interface is available in **Turkish**, **English**, and **Simplified Chinese**. Use the language selector in the top bar; your choice is saved in the current browser.
+
+Arayüz **Türkçe**, **İngilizce** ve **Basitleştirilmiş Çince** olarak kullanılabilir. Üst çubuktaki dil menüsünden seçim yapın; tercihiniz bu tarayıcıda saklanır.
+
+界面支持**简体中文**、**土耳其语**和**英语**。可在顶部语言菜单中切换，选择会保存在当前浏览器中。
 
 ## 工作流程
 
@@ -86,6 +95,7 @@ flowchart LR
 ├── index.html          入口页面，双击即用
 ├── css/style.css       Neo-Brutalism 视觉系统
 ├── js/
+│   ├── i18n.js         Türkçe / English 界面与导出文本
 │   ├── yaml-lite.js    YAML 子集解析器（兼容 Bukkit 配置）
 │   ├── metro-config.js Metro 配置解析（现行与旧版格式）
 │   ├── geo.js          几何引擎（投影、折线化、直角化、并行偏移、站名避让）

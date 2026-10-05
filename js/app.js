@@ -19,13 +19,14 @@
     };
 
     var regenTimer = null;
+    var t = MMS.i18n.t;
 
     // ---------- 工具 ----------
     function safeName(s) {
         var t = String(s || '')
             .replace(/[\\/:*?"<>|\r\n]/g, '-')
             .trim();
-        return t || 'metro-map';
+        return t || MMS.i18n.t('titleFallback');
     }
 
     function downloadBlob(blob, filename) {
@@ -44,7 +45,7 @@
     function showError(msg) {
         var box = document.createElement('div');
         box.className = 'errbox';
-        box.textContent = '错误：' + msg;
+        box.textContent = t('errorPrefix') + msg;
         $('warnings').appendChild(box);
     }
 
@@ -83,23 +84,23 @@
         if (kind === 'lines') {
             state.linesText = text;
             state.linesName = name;
-            setDropzone($('dropLines'), name || '已粘贴 lines.yml 内容');
+            setDropzone($('dropLines'), name || t('pastedLinesName'));
         } else {
             state.stopsText = text;
             state.stopsName = name;
-            setDropzone($('dropStops'), name || '已粘贴 stops.yml 内容');
+            setDropzone($('dropStops'), name || t('pastedStopsName'));
         }
         tryParse();
     }
 
     function setDropzone(el, label) {
         el.classList.add('ok');
-        el.querySelector('.dz-sub').textContent = '已载入：' + label;
+        el.querySelector('.dz-sub').textContent = t('loadedFile', { name: label });
     }
 
     function resetDropzone(el, sub) {
         el.classList.remove('ok');
-        el.querySelector('.dz-sub').textContent = sub;
+        el.querySelector('.dz-sub').textContent = sub || t('dropHint');
     }
 
     function handleFiles(fileList) {
@@ -111,11 +112,11 @@
             reader.onload = function () {
                 var text = String(reader.result || '');
                 var kind = sniffKind(f.name, text);
-                setSource(kind, text, f.name + '（' + Math.round(f.size / 1024) + ' KB）');
+                setSource(kind, text, f.name + ' (' + Math.round(f.size / 1024) + ' KB)');
                 if (--remaining === 0) { /* done */ }
             };
             reader.onerror = function () {
-                showError('读取文件失败：' + f.name);
+                showError(t('readFileFailed', { name: f.name }));
             };
             reader.readAsText(f, 'utf-8');
         });
@@ -158,12 +159,12 @@
             if (!state.stopsText) missing.push('stops.yml');
             var info = document.createElement('div');
             info.className = 'warnbox';
-            info.textContent = '还差 ' + missing.join('、') + '，导入完整后自动生成。';
+            info.textContent = t('parseMissing', { files: missing.join(', ') });
             $('warnings').appendChild(info);
             return;
         }
         try {
-            state.model = MMS.metro.parse(state.linesText, state.stopsText);
+            state.model = MMS.metro.parse(state.linesText, state.stopsText, t);
         } catch (e) {
             state.model = null;
             showError(e.message);
@@ -179,7 +180,7 @@
         sel.innerHTML = '';
         var optAuto = document.createElement('option');
         optAuto.value = '';
-        optAuto.textContent = '自动（停靠区最多的世界）';
+        optAuto.textContent = t('autoWorld');
         sel.appendChild(optAuto);
 
         var count = new Map();
@@ -196,7 +197,7 @@
         worlds.forEach(function (w) {
             var o = document.createElement('option');
             o.value = w.name;
-            o.textContent = w.name + '（' + w.count + ' 站）';
+            o.textContent = w.name + ' (' + t(w.count === 1 ? 'stationCountOne' : 'stationCount', { count: w.count }) + ')';
             sel.appendChild(o);
         });
         if (prev) {
@@ -216,7 +217,8 @@
             autoColor: $('optAutoColor').checked,
             mode: modeEl ? modeEl.value : 'real',
             parallelSpacing: lineWidth + 3,
-            targetSize: 1100
+            targetSize: 1100,
+            translate: t
         };
     }
 
@@ -227,27 +229,39 @@
         try {
             map = MMS.geo.build(state.model, opts);
         } catch (e) {
-            showError('生成失败：' + e.message);
+            showError(t('generationFailed') + e.message);
             return;
         }
         var ui = {
-            title: $('optTitle').value || '地铁线网图',
+            title: $('optTitle').value || t('defaultMapTitle'),
             showLegend: $('optLegend').checked,
             showScale: $('optScale').checked,
             showNorth: $('optNorth').checked,
             showFooter: $('optFooter').checked,
             fontSize: parseFloat($('optFont').value) || 12,
             lineWidth: parseFloat($('optLineWidth').value) || 7,
-            dateText: new Date().toISOString().slice(0, 10)
+            dateText: new Date().toISOString().slice(0, 10),
+            labels: {
+                legend: t('svgLegend'),
+                line: map.stats.lineCount === 1 ? t('svgLine') : t('svgLines'),
+                station: map.stats.nodeCount === 1 ? t('svgStation') : t('svgStations'),
+                transfer: map.stats.transferCount === 1 ? t('svgTransfer') : t('svgTransfers'),
+                world: t('svgWorld'),
+                scaleUnit: t('svgScaleUnit'),
+                footer: t('svgFooter'),
+                modeReal: t('svgModeReal'),
+                modeSchematic: t('svgModeSchematic'),
+                modePerpendicular: t('svgModePerpendicular')
+            }
         };
         var out = MMS.render.build(map, ui);
         state.map = map;
         state.lastRender = out;
         $('preview').innerHTML = out.svg;
-        $('stageTitle').textContent = Math.round(out.width) + ' × ' + Math.round(out.height) + ' 图纸单位';
+        $('stageTitle').textContent = Math.round(out.width) + ' × ' + Math.round(out.height) + ' ' + t('drawingUnits');
         renderFeedback(map);
         if (map.nodes.length === 0) {
-            showError('没有可绘制的车站，请检查世界选择与坐标。');
+            showError(t('noStations'));
         }
     }
 
@@ -263,39 +277,47 @@
         if (all.length) {
             var box = document.createElement('div');
             box.className = 'warnbox';
-            var html = '提示（' + all.length + '）<ul>';
+            var boxTitle = document.createElement('strong');
+            boxTitle.textContent = t('warningCount', { count: all.length });
+            box.appendChild(boxTitle);
+            var list = document.createElement('ul');
             all.forEach(function (w) {
-                html += '<li>' + w.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</li>';
+                var item = document.createElement('li');
+                item.textContent = w;
+                list.appendChild(item);
             });
-            html += '</ul>';
-            box.innerHTML = html;
+            box.appendChild(list);
             $('warnings').appendChild(box);
         }
         var s = map.stats;
-        $('stats').innerHTML =
-            '线路：<b>' +
-            s.lineCount +
-            '</b> 条 &nbsp;|&nbsp; 车站：<b>' +
-            s.nodeCount +
-            '</b> 座<br>换乘站：<b>' +
-            s.transferCount +
-            '</b> 座 &nbsp;|&nbsp; 同名合并：<b>' +
-            s.mergedGroupCount +
-            '</b> 组<br>世界：<b>' +
-            (map.world || '-') +
-            '</b> &nbsp;|&nbsp; 无停靠点估算：<b>' +
-            s.cornerStops +
-            '</b> 处';
+        var stats = $('stats');
+        stats.innerHTML = '';
+        function addStat(label, value) {
+            var row = document.createElement('div');
+            var name = document.createElement('span');
+            var number = document.createElement('b');
+            name.textContent = label + ' ';
+            number.textContent = value;
+            row.appendChild(name);
+            row.appendChild(number);
+            stats.appendChild(row);
+        }
+        addStat(t('statLines'), s.lineCount);
+        addStat(t('statStations'), s.nodeCount);
+        addStat(t('statTransfers'), s.transferCount);
+        addStat(t('statMerged'), s.mergedGroupCount);
+        addStat(t('statWorld'), map.world || '-');
+        addStat(t('statEstimatedStops'), s.cornerStops);
         var transferNames = (map.transferStations || []).map(function (node) {
             return node.name;
         });
         var transferSummary = document.createElement('div');
-        transferSummary.textContent = '换乘站名：' + (transferNames.length ? transferNames.join('、') : '无');
-        $('stats').appendChild(transferSummary);
+        transferSummary.textContent = t('transferNames') + ' ' + (transferNames.length ? transferNames.join(', ') : t('none'));
+        stats.appendChild(transferSummary);
         if (s.crossingCount) {
             var crossingSummary = document.createElement('div');
-            crossingSummary.textContent = '非换乘交叉：' + s.crossingCount + ' 处（已用断线跨越区分）';
-            $('stats').appendChild(crossingSummary);
+            crossingSummary.textContent = t('nonTransferCrossings', { count: s.crossingCount });
+            stats.appendChild(crossingSummary);
         }
     }
 
@@ -318,7 +340,7 @@
             new Blob([state.lastRender.svg], { type: 'image/svg+xml;charset=utf-8' }),
             baseName() + '.svg'
         );
-        showToast('已导出 SVG：' + baseName() + '.svg', 'success');
+        showToast(t('svgExported', { name: baseName() + '.svg' }), 'success');
     }
 
     function exportPng() {
@@ -349,15 +371,15 @@
             canvas.toBlob(function (b) {
                 if (b) {
                     downloadBlob(b, baseName() + '@' + (scale > 1 ? scale + 'x' : '1x') + '.png');
-                    showToast('已导出 PNG（' + (scale > 1 ? scale + 'x' : '1x') + '）', 'success');
+                    showToast(t('pngExported', { scale: scale > 1 ? scale + 'x' : '1x' }), 'success');
                 } else {
-                    showError('PNG 生成失败，可改用「下载 SVG」。');
+                    showError(t('pngFailed'));
                 }
             }, 'image/png');
         };
         img.onerror = function () {
             URL.revokeObjectURL(url);
-            showError('PNG 导出失败，可改用「下载 SVG」。');
+            showError(t('pngExportFailed'));
         };
         img.src = url;
     }
@@ -365,14 +387,14 @@
     function exportRmp() {
         if (!state.map) return;
         var save = MMS.rmp.build(state.map, state.lastRender ? state.lastRender.placements : null, {
-            title: $('optTitle').value || 'Minecraft Metro Map',
+            title: $('optTitle').value || t('defaultMapTitle'),
             pathType: $('rmpPath').value
         });
         downloadBlob(
             new Blob([JSON.stringify(save)], { type: 'application/json' }),
             baseName() + '-rmp.json'
         );
-        showToast('已导出 RMP 存档，可导入 Rail Map Painter 继续编辑', 'success');
+        showToast(t('rmpExported'), 'success');
     }
 
     // ---------- 事件绑定 ----------
@@ -405,40 +427,58 @@
         bindDropzone($('dropLines'));
         bindDropzone($('dropStops'));
 
+        $('languageSelect').value = MMS.i18n.getLanguage();
+        $('languageSelect').addEventListener('change', function () {
+            var previousSampleTitle = t('sampleMapTitle');
+            var previousDefaultTitle = t('defaultMapTitle');
+            MMS.i18n.setLanguage($('languageSelect').value);
+            t = MMS.i18n.t;
+            if ($('optTitle').value === previousSampleTitle || $('optTitle').value === previousDefaultTitle) {
+                $('optTitle').value = t('sampleMapTitle');
+            }
+            if (state.linesName) setDropzone($('dropLines'), state.linesName);
+            else resetDropzone($('dropLines'));
+            if (state.stopsName) setDropzone($('dropStops'), state.stopsName);
+            else resetDropzone($('dropStops'));
+            if (!state.linesText || !state.stopsText) showWaitingPlaceholder();
+            tryParse();
+        });
+
         $('btnSample').addEventListener('click', function () {
-            state.linesName = '内置示例 lines.yml';
-            state.stopsName = '内置示例 stops.yml';
+            state.linesName = t('sampleLinesName');
+            state.stopsName = t('sampleStopsName');
             state.linesText = MMS.SAMPLE.lines;
             state.stopsText = MMS.SAMPLE.stops;
             setDropzone($('dropLines'), state.linesName);
             setDropzone($('dropStops'), state.stopsName);
-            $('optTitle').value = '云屿市轨道交通线网图';
+            $('optTitle').value = t('sampleMapTitle');
             tryParse();
-            showToast('已载入内置示例数据', 'info');
+            showToast(t('sampleLoaded'), 'info');
         });
 
         $('btnClear').addEventListener('click', function () {
             state.linesText = '';
             state.stopsText = '';
+            state.linesName = '';
+            state.stopsName = '';
             state.model = null;
             state.map = null;
             state.lastRender = null;
-            resetDropzone($('dropLines'), '拖入文件 / 点击选择');
-            resetDropzone($('dropStops'), '拖入文件 / 点击选择');
-            $('preview').innerHTML = '<div class="placeholder">等待导入配置…<br>将服务器 <code>plugins/Metro/</code> 下的 <code>lines.yml</code> 与 <code>stops.yml</code> 拖入左侧。</div>';
+            resetDropzone($('dropLines'));
+            resetDropzone($('dropStops'));
+            showWaitingPlaceholder();
             $('stageTitle').textContent = '';
             clearFeedback();
-            showToast('已清空当前数据', 'info');
+            showToast(t('dataCleared'), 'info');
         });
 
         $('btnPaste').addEventListener('click', function () {
             var l = $('taLines').value,
                 s = $('taStops').value;
-            if (l.trim()) setSource('lines', l, '粘贴的 lines.yml');
-            if (s.trim()) setSource('stops', s, '粘贴的 stops.yml');
-            if (!l.trim() && !s.trim()) showToast('请先粘贴 lines.yml 或 stops.yml 的内容', 'warning');
+            if (l.trim()) setSource('lines', l, t('pastedLinesName'));
+            if (s.trim()) setSource('stops', s, t('pastedStopsName'));
+            if (!l.trim() && !s.trim()) showToast(t('pasteFirst'), 'warning');
         });
-
         $('btnSvg').addEventListener('click', exportSvg);
         $('btnPng').addEventListener('click', exportPng);
         $('btnRmp').addEventListener('click', exportRmp);
@@ -482,18 +522,22 @@
         });
     }
 
+    function showWaitingPlaceholder() {
+        $('preview').innerHTML = '<div class="placeholder">' + t('waiting') + '<br>' + t('emptyInstructions') + '</div>';
+    }
+
     // ---------- 启动 ----------
     document.addEventListener('DOMContentLoaded', function () {
         bind();
         // 默认载入内置示例，立即看到效果
         state.linesText = MMS.SAMPLE.lines;
         state.stopsText = MMS.SAMPLE.stops;
-        state.linesName = '内置示例 lines.yml';
-        state.stopsName = '内置示例 stops.yml';
+        state.linesName = t('sampleLinesName');
+        state.stopsName = t('sampleStopsName');
         setDropzone($('dropLines'), state.linesName);
         setDropzone($('dropStops'), state.stopsName);
-        $('optTitle').value = '云屿市轨道交通线网图';
+        $('optTitle').value = t('sampleMapTitle');
         tryParse();
-        showToast('已载入内置示例，可直接体验或导入自己的配置', 'info');
+        showToast(t('sampleToast'), 'info');
     });
 })();

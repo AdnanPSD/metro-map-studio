@@ -65,7 +65,7 @@
 
     /**
      * @param {Object} map  geo.build() 的结果
-     * @param {Object} opts { title, showLegend, showScale, showNorth, showFooter, fontSize, lineWidth, transparent, dateText }
+     * @param {Object} opts { title, showLegend, showScale, showNorth, showFooter, fontSize, lineWidth, transparent, dateText, labels }
      * @returns {Object} { svg, width, height, placements }
      */
     function build(map, opts) {
@@ -74,6 +74,7 @@
         var lw = opts.lineWidth || 7;
         var dotR = 4.6,
             dotrInt = 6.6;
+        var labels = opts.labels || {};
 
         var b = map.bounds;
         var pad = 30,
@@ -148,15 +149,18 @@
                 esc(title) +
                 '</text>'
         );
-        var modeLabel =
-            map.mode === 'schematic' ? '45° 示意图' : map.mode === 'perpendicular' ? '直角折线' : '实际走向';
+        var modeLabel = map.mode === 'schematic'
+            ? labels.modeSchematic || '45° 示意图'
+            : map.mode === 'perpendicular'
+              ? labels.modePerpendicular || '直角折线'
+              : labels.modeReal || '实际走向';
         var sub =
             map.stats.lineCount +
-            ' 条线路 · ' +
+            ' ' + (labels.line || '条线路') + ' · ' +
             map.stats.nodeCount +
-            ' 座车站 · ' +
+            ' ' + (labels.station || '座车站') + ' · ' +
             map.stats.transferCount +
-            ' 座换乘站 · 世界 “' +
+            ' ' + (labels.transfer || '座换乘站') + ' · ' + (labels.world || '世界') + ' “' +
             (map.world || '-') +
             '” · ' +
             modeLabel;
@@ -279,7 +283,7 @@
                     fmt(lx) +
                     '" y="' +
                     fmt(ly + 8) +
-                    '" font-size="14" font-weight="700" fill="#1f2430">线路图例</text>'
+                    '" font-size="14" font-weight="700" fill="#1f2430">' + esc(labels.legend || '线路图例') + '</text>'
             );
             map.lines.forEach(function (line, i) {
                 var yc = ly + 36 + i * 24;
@@ -312,7 +316,7 @@
                         fmt(yc) +
                         '" r="2.4" fill="#fff" stroke="#2b2b2b" stroke-width="1"/>'
                 );
-                var label = clampText(line.name + ' · ' + line.stopCount + ' 站', legendW - 64, 12);
+                var label = clampText(line.name + ' · ' + line.stopCount + ' ' + (labels.station || '站'), legendW - 64, 12);
                 out.push(
                     '<text x="' +
                         fmt(lx + 44) +
@@ -371,7 +375,7 @@
                     fmt(sy - 7) +
                     '" text-anchor="middle" font-size="11" fill="#4b5563">' +
                     blocks +
-                    ' 格</text>'
+                    ' ' + esc(labels.scaleUnit || '格') + '</text>'
             );
         }
 
@@ -397,7 +401,7 @@
 
         // ---------- 页脚 ----------
         if (opts.showFooter !== false) {
-            var foot = '由 Metro 插件配置自动生成 · Metro 线网工坊';
+            var foot = labels.footer || '由 Metro 插件配置自动生成 · Metro 线网工坊';
             if (opts.dateText) foot += ' · ' + opts.dateText;
             out.push(
                 '<text x="' +

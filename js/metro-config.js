@@ -105,20 +105,21 @@
      * @param {string} stopsText
      * @returns {{lines: Array, stops: Map, warnings: Array, stats: Object}}
      */
-    function parse(linesText, stopsText) {
+    function parse(linesText, stopsText, translate) {
         var warnings = [];
+        var t = typeof translate === 'function' ? translate : null;
         var stopsDoc = {};
         var linesDoc = {};
 
         try {
             stopsDoc = MMS.yaml.parse(stopsText || '');
         } catch (e) {
-            throw new Error('stops.yml 解析失败：' + e.message);
+            throw new Error(t ? t('parseStopsFailed', { error: e.message }) : 'stops.yml 解析失败：' + e.message);
         }
         try {
             linesDoc = MMS.yaml.parse(linesText || '');
         } catch (e) {
-            throw new Error('lines.yml 解析失败：' + e.message);
+            throw new Error(t ? t('parseLinesFailed', { error: e.message }) : 'lines.yml 解析失败：' + e.message);
         }
 
         var stops = new Map();
@@ -126,7 +127,7 @@
             if (id === 'schema_version') return;
             var sec = stopsDoc[id];
             if (sec == null || typeof sec !== 'object') {
-                warnings.push('停靠区 “' + id + '” 内容为空，已跳过。');
+                warnings.push(t ? t('warnStopEmpty', { id: id }) : '停靠区 “' + id + '” 内容为空，已跳过。');
                 return;
             }
             var name = pick(sec, ['display_name', 'name']);
@@ -148,7 +149,9 @@
                 }
             }
             if (!pos) {
-                warnings.push('停靠区 “' + id + '”（' + name + '）没有可用坐标（缺 stoppoint / corner），已跳过。');
+                warnings.push(t
+                    ? t('warnStopPosition', { id: id, name: name })
+                    : '停靠区 “' + id + '”（' + name + '）没有可用坐标（缺 stoppoint / corner），已跳过。');
                 return;
             }
             stops.set(id, {
@@ -183,16 +186,18 @@
                 if (loc) routePoints.push(loc);
             });
             if (stopIds.length === 0) {
-                warnings.push('线路 “' + id + '”（' + name + '）没有停靠区列表，已跳过。');
+                warnings.push(t
+                    ? t('warnLineStops', { id: id, name: name })
+                    : '线路 “' + id + '”（' + name + '）没有停靠区列表，已跳过。');
                 return;
             }
             var missing = stopIds.filter(function (sid) {
                 return !stops.has(sid);
             });
             if (missing.length) {
-                warnings.push(
-                    '线路 “' + id + '” 引用了不存在的停靠区：' + missing.join('、') + '（已从该线路中忽略）。'
-                );
+                warnings.push(t
+                    ? t('warnMissingStops', { id: id, stops: missing.join(', ') })
+                    : '线路 “' + id + '” 引用了不存在的停靠区：' + missing.join('、') + '（已从该线路中忽略）。');
             }
             lines.push({
                 id: id,

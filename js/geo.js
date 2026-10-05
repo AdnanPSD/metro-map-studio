@@ -280,6 +280,10 @@
     function build(model, opts) {
         opts = opts || {};
         var warnings = [];
+        var translate = typeof opts.translate === 'function' ? opts.translate : null;
+        function message(key, params, fallback) {
+            return translate ? translate(key, params) : fallback;
+        }
         var mode =
             opts.mode === 'schematic' ? 'schematic' : opts.mode === 'perpendicular' ? 'perpendicular' : 'real';
         var mergeByName = opts.mergeByName !== false;
@@ -300,7 +304,7 @@
         });
         var orphanStopCount = model.stops.size - routedStops.length;
         if (orphanStopCount > 0) {
-            warnings.push(orphanStopCount + ' 个停靠区未被任何线路引用，已忽略。');
+            warnings.push(message('warnOrphanStops', { count: orphanStopCount }, orphanStopCount + ' 个停靠区未被任何线路引用，已忽略。'));
         }
 
         // ---------- 2. 世界选择 ----------
@@ -316,7 +320,7 @@
             return b.count - a.count;
         });
         if (!worlds.length) {
-            return emptyMap(worlds, warnings);
+            return emptyMap(worlds, warnings, message);
         }
         var world = opts.world && worldCount.has(opts.world) ? opts.world : worlds[0].name;
 
@@ -327,9 +331,11 @@
             else skippedWorld++;
         });
         if (skippedWorld > 0) {
-            warnings.push(
+            warnings.push(message(
+                'warnSelectedWorld',
+                { world: world, count: skippedWorld },
                 '已选择世界 “' + world + '”，另有 ' + skippedWorld + ' 个停靠区位于其他世界，未参与绘制。'
-            );
+            ));
         }
 
         // ---------- 2. 同名车站合并 ----------
@@ -424,7 +430,11 @@
                 seq.push(node);
             });
             if (seq.length < 2) {
-                warnings.push('线路 “' + line.name + '” 在当前世界可用停靠区不足 2 个，已跳过绘制。');
+                warnings.push(message(
+                    'warnTooFewStations',
+                    { line: line.name },
+                    '线路 “' + line.name + '” 在当前世界可用停靠区不足 2 个，已跳过绘制。'
+                ));
                 return;
             }
             seq.forEach(function (n) {
@@ -454,10 +464,11 @@
                     parts = bucketRoutePoints(a, b, routeW, toDiagramX, toDiagramY);
                     if (parts.totalAccepted < parts.pointCount * 0.2 && parts.pointCount > 40 && !line._rpWarned) {
                         line._rpWarned = true;
-                        warnings_push(
-                            warnings,
+                        warnings_push(warnings, message(
+                            'warnRouteDeviation',
+                            { line: line.name, accepted: parts.totalAccepted, total: parts.pointCount },
                             '线路 “' + line.name + '” 的录制轨迹与站台位置偏差较大（仅 ' + parts.totalAccepted + '/' + parts.pointCount + ' 个轨迹点被采用），该线路可能未按最新站位重新录制（/m line recordroute）。'
-                        );
+                        ));
                     }
                 } else {
                     parts.raw = true; // 标记：来自直连或简化
@@ -572,13 +583,15 @@
                     l.colorHex = colorByGroup[l.stopKey];
                     l.autoColor = true;
                 });
-                warnings.push(
+                warnings.push(message(
+                    'warnAutoColors',
+                    { count: linesData.length, groups: paletteIndex },
                     '全部 ' +
                         linesData.length +
                         ' 条线路的颜色相同（或为默认白色），已按 ' +
                         paletteIndex +
                         ' 组线路自动分配预览配色；左侧“自动配色”选项可关闭，此调整不影响服务器配置文件。'
-                );
+                ));
             }
         }
 
@@ -633,18 +646,22 @@
         });
         var crossings = detectCrossings(linesData, nodes);
         if (crossings.length) {
-            warnings.push(
+            warnings.push(message(
+                'warnCrossings',
+                { count: crossings.length },
                 '检测到 ' + crossings.length + ' 处非换乘线路交叉，已用断线跨越符号区分；交叉处不代表换乘。'
-            );
+            ));
         }
         var cornerStops = 0;
         usableStops.forEach(function (s) {
             if (s.posSource === 'corner') cornerStops++;
         });
         if (cornerStops > 0) {
-            warnings.push(
+            warnings.push(message(
+                'warnCornerStops',
+                { count: cornerStops },
                 '有 ' + cornerStops + ' 个停靠区缺少 stoppoint（未设置停靠点），位置按 corner 区域中心估算。'
-            );
+            ));
         }
 
         return {
@@ -675,8 +692,12 @@
         arr.push(msg);
     }
 
-    function emptyMap(worlds, warnings) {
-        warnings.push('没有解析到任何带坐标的停靠区，请检查 stops.yml。');
+    function emptyMap(worlds, warnings, message) {
+        warnings.push(message(
+            'warnNoCoordinates',
+            {},
+            '没有解析到任何带坐标的停靠区，请检查 stops.yml。'
+        ));
         return {
             world: null,
             worlds: worlds,
